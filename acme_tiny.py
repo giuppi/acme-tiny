@@ -12,7 +12,7 @@ LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.StreamHandler())
 LOGGER.setLevel(logging.INFO)
 
-def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, skip_verify=False):
+def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, offline=False, skip_verify=False):
     # helper function base64 encode for jose spec
     def _b64(b):
         return base64.urlsafe_b64encode(b).decode('utf8').replace("=", "")
@@ -111,9 +111,15 @@ def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, skip_verify=F
         with open(wellknown_path, "w") as wellknown_file:
             wellknown_file.write(keyauthorization)
 
+        wellknown_url = "http://{0}/.well-known/acme-challenge/{1}".format(domain, token)
+        
+        # "offline" mode, pause challenge to copy files on the webserver
+        if not offline:
+            raw_input("\nCopy this file to the server:\n\t>>>\t" + wellknown_path + "\nit should be accessible at\n\t>>>\t" + wellknown_url +"\nthen press ENTER to continue...")
+        
         # check that the file is in place
         if not skip_verify:
-            wellknown_url = "http://{0}/.well-known/acme-challenge/{1}".format(domain, token)
+            
             try:
                 resp = urlopen(wellknown_url)
                 resp_data = resp.read().decode('utf8').strip()
@@ -189,11 +195,12 @@ def main(argv):
     parser.add_argument("--acme-dir", required=True, help="path to the .well-known/acme-challenge/ directory")
     parser.add_argument("--quiet", action="store_const", const=logging.ERROR, help="suppress output except for errors")
     parser.add_argument("--ca", default=DEFAULT_CA, help="certificate authority, default is Let's Encrypt")
+    parser.add_argument("--offline", action='store_false', help="run this script from another pc (not the server)")
     parser.add_argument("--skip-verify", action='store_true', help="skip checking if the challenge exists")
 
     args = parser.parse_args(argv)
     LOGGER.setLevel(args.quiet or LOGGER.level)
-    signed_crt = get_crt(args.account_key, args.csr, args.acme_dir, log=LOGGER, CA=args.ca, skip_verify=args.skip_verify)
+    signed_crt = get_crt(args.account_key, args.csr, args.acme_dir, log=LOGGER, CA=args.ca, offline=args.offline, skip_verify=args.skip_verify)
     sys.stdout.write(signed_crt)
 
 if __name__ == "__main__": # pragma: no cover
